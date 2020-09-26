@@ -1,9 +1,11 @@
 from itertools import chain
 from typing import Iterable, List, Tuple
 
+import numpy as np
 import pandas as pd
 import pytorch_lightning as pl
 import torch
+from sklearn.metrics import precision_score, recall_score, f1_score, roc_auc_score, accuracy_score
 from torch import nn
 from torch.nn import BCEWithLogitsLoss
 from torch.optim.optimizer import Optimizer
@@ -13,9 +15,10 @@ from data import collate_fn, LentaDataset
 
 
 class TamerNet3000(pl.LightningModule):
-    def __init__(self, n_articles, embedding_size=32, hidden_size=128) -> None:
+    def __init__(self, n_articles, embedding_size=32, hidden_size=128, threshold=0.1) -> None:
         super().__init__()
         self.n_articles = n_articles
+        self.threshold = threshold
 
         # model
         self.basket_embed = nn.Embedding(n_articles + 1,
@@ -29,7 +32,7 @@ class TamerNet3000(pl.LightningModule):
         self.loss = BCEWithLogitsLoss()
 
     def prepare_data(self) -> None:
-        transactions = pd.read_parquet("hack_data/transactions_cut.parquet", engine="pyarrow")
+        transactions = pd.read_parquet("../../data/hack_data/transactions_cut.parquet", engine="pyarrow")
         transactions = transactions.sample(frac=0.05)
         self.train_dataset = LentaDataset(transactions, [0, 1, 2])
         self.val_dataset = LentaDataset(transactions, [1, 2, 3])
@@ -84,7 +87,6 @@ class TamerNet3000(pl.LightningModule):
         basket_embeddings_padded = torch.nn.utils.rnn.pad_sequence(
             basket_embeddings,
             batch_first=True,
-            # padding_value=torch.zeros(basket_embeddings_flattened.shape[-1])
             padding_value=0.0
         )
 
@@ -97,39 +99,46 @@ class TamerNet3000(pl.LightningModule):
 
         return logits
 
-    def training_step(self, batch, batch_idx):
-        logits = self(batch)
-        loss = self.loss(logits.squeeze(), torch.tensor(batch[2], device=self.device, dtype=torch.float))
+    def _compute_loss(self, batch):
+        logits = self(batch).squeeze()
+        targets = torch.tensor(batch[2], device=self.device, dtype=torch.float)
+        loss = self.loss(logits, targets)
 
-        return {"loss": loss, "logits": logits, "log": {"Training loss": loss.item()}}
+        return loss, logits, targets
+
+    def training_step(self, batch, batch_idx):
+        loss, logits, targets = self._compute_loss(batch)
+
+        return {"loss": loss, "logits": logits.cpu(), "targets": targets.cpu(), "log": {"train/batch_loss": loss.item()}}
 
     def training_epoch_end(self, outputs):
-        epoch_loss = torch.stack([x["loss"] for x in outputs]).mean()
-
-        # Metrics
-        # acc_top1 = torch.stack([torch.tensor(x["acc_top1"]) for x in outputs]).mean()
-
-        logs = {"train/epoch_loss": epoch_loss,
-                "train/metric_coooooool": 0.0}
-
-        return {"val_loss": epoch_loss, "metric": 0.0, "log": logs}
+        return {"log": self._compute_metrics(outputs, "train")}
 
     def validation_step(self, batch, batch_idx):
-        logits = self(batch)
-        loss = self.loss(logits.squeeze(), torch.tensor(batch[2], device=self.device, dtype=torch.float))
+        loss, logits, targets = self._compute_loss(batch)
 
-        return {"loss": loss, "logits": logits, "log": {"Validation loss": loss.item()}}
+        return {"loss": loss, "logits": logits.cpu(), "targets": targets.cpu(), "log": {"val/batch_loss": loss.item()}}
+
+    def _compute_metrics(self, outputs, prefix="val"):
+        logits = torch.cat([item["logits"] for item in outputs])
+        targets = torch.cat([item["targets"] for item in outputs])
+        probas = torch.sigmoid(logits)
+        preds = probas > self.threshold
+
+        return {
+            f"{prefix}/epoch_loss": torch.stack([item["loss"] for item in outputs]).mean(),
+            f"{prefix}/precision": precision_score(targets, preds),
+            f"{prefix}/negative_precision": precision_score(~targets, ~preds),
+            f"{prefix}/recall": recall_score(targets, preds),
+            f"{prefix}/negative_recall": recall_score(~targets, ~preds),
+            f"{prefix}/f1": f1_score(targets, preds),
+            f"{prefix}/negative_f1": f1_score(targets, ~preds),
+            f"{prefix}/roc_auc": roc_auc_score(targets, probas) if targets.any() != 0 and targets.all() != 1 else 0,
+            f"{prefix}/accuracy": accuracy_score(targets, preds),
+        }
 
     def validation_epoch_end(self, outputs):
-        epoch_loss = torch.stack([x["loss"] for x in outputs]).mean()
-
-        # Metrics
-        # acc_top1 = torch.stack([torch.tensor(x["acc_top1"]) for x in outputs]).mean()
-
-        logs = {"val/epoch_loss": epoch_loss,
-                "val/metric_coooooool": 0.0}
-
-        return {"val_loss": epoch_loss, "metric": 0.0, "log": logs}
+        return {"log": self._compute_metrics(outputs, "val")}
 
     def configure_optimizers(self) -> Optimizer:
         return torch.optim.Adam(self.parameters(), lr=1e-4)
