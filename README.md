@@ -6,7 +6,7 @@ The model inside looks as follows:
 
 <a href="https://ibb.co/wLjDQDP"><img src="https://i.ibb.co/1njHXHP/untitled-2x.png" alt="untitled-2x" border="0"></a>
 
-Generally speaking, it aggregates all the temporal info we have about user's transactions via article embeddings and LSTM, and then classifies the user as a "leaving" or not. We used Pytorch Lightning as a supportive framework to develop the model.
+Generally speaking, it aggregates all the temporal info we have about user's transactions via article embeddings and RNN, and then classifies the user as a "leaving" or not. We used Pytorch Lightning as a supportive framework to develop the model.
 
 ## Target & evaluation
 
