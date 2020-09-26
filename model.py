@@ -20,6 +20,12 @@ class TamerNet3000(pl.LightningModule):
         self.n_articles = n_articles
         self.threshold = threshold
 
+        # data
+        transactions = pd.read_parquet("hack_data/transactions_cut.parquet", engine="pyarrow")
+        transactions = transactions.sample(frac=0.05)
+        self.train_dataset = LentaDataset(transactions, [0, 1, 2])
+        self.val_dataset = LentaDataset(transactions, [1, 2, 3])
+
         # model
         self.basket_embed = nn.Embedding(n_articles + 1,
                                          embedding_size,
@@ -31,11 +37,11 @@ class TamerNet3000(pl.LightningModule):
 
         self.loss = BCEWithLogitsLoss()
 
-    def prepare_data(self) -> None:
-        transactions = pd.read_parquet("hack_data/transactions_cut.parquet", engine="pyarrow")
-        transactions = transactions.sample(frac=0.05)
-        self.train_dataset = LentaDataset(transactions, [0, 1, 2])
-        self.val_dataset = LentaDataset(transactions, [1, 2, 3])
+    # def prepare_data(self) -> None:
+    #     transactions = pd.read_parquet("hack_data/transactions_cut.parquet", engine="pyarrow")
+    #     transactions = transactions.sample(frac=0.05)
+    #     self.train_dataset = LentaDataset(transactions, [0, 1, 2])
+    #     self.val_dataset = LentaDataset(transactions, [1, 2, 3])
 
     def train_dataloader(self) -> DataLoader:
         train_loader = DataLoader(dataset=self.train_dataset,
