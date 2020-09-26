@@ -2,6 +2,8 @@ import pandas as pd
 import torch
 import torch.utils.data as torchdata
 
+import sklearn.preprocessing as skprep
+
 
 class LentaDataset(torchdata.Dataset):
     """
@@ -9,6 +11,7 @@ class LentaDataset(torchdata.Dataset):
     :param transactions: initial transactions table
     """
     def __init__(self, transactions: pd.DataFrame) -> None:
+        transactions["material_encoded"] = skprep.LabelEncoder().fit_transform(transactions["material"])
         self.clients_to_chqs = transactions.groupby(["client_id"])["chq_id"].apply(list).to_frame().reset_index()
         self.clients_to_chqs = self.clients_to_chqs.set_index("client_id")
         self.chqs_to_materials = transactions.groupby(["chq_id"])["material_encoded"].apply(
