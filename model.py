@@ -32,7 +32,7 @@ class TamerNet3000(pl.LightningModule):
         self.loss = BCEWithLogitsLoss()
 
     def prepare_data(self) -> None:
-        transactions = pd.read_parquet("../../data/hack_data/transactions_cut.parquet", engine="pyarrow")
+        transactions = pd.read_parquet("hack_data/transactions_cut.parquet", engine="pyarrow")
         transactions = transactions.sample(frac=0.05)
         self.train_dataset = LentaDataset(transactions, [0, 1, 2])
         self.val_dataset = LentaDataset(transactions, [1, 2, 3])
