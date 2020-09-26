@@ -18,7 +18,9 @@ We've validated the model carefully on the future data that we weren't training 
 
 ## Experiments
 Some of our experiments are presented in W&B:
+
 https://wandb.ai/waytobehigh/lenta_hackathon?workspace=user-waytobehigh
+
 We cleansed out all the debugging and failed stuff so that you could enjoy pretty plots :)
 
 ## Docker setup
