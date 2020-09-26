@@ -17,11 +17,9 @@ One of the major problems of this setting is a high class imbalance (leaving cli
 We've validated the model carefully on the future data that we weren't training on. The procedure resembles standart time series cross-validation. We take several months, fit to predict the probability of leave in the next one, and then move one month forward again to validate the model.
 
 ## Experiments
-Some of our experiments are presented in W&B:
+Some of our experiments [are presented in W&B](https://wandb.ai/waytobehigh/lenta_hackathon?workspace=user-waytobehigh). We cleansed out all the debugging and failed stuff so that you could enjoy pretty plots :)
 
-https://wandb.ai/waytobehigh/lenta_hackathon?workspace=user-waytobehigh
-
-We cleansed out all the debugging and failed stuff so that you could enjoy pretty plots :)
+Our current validation score is **0.82 ROC-AUC**.
 
 ## Docker setup
 #### If you don't want to run training in docker, you can proceed to packages section
