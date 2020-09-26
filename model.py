@@ -128,11 +128,11 @@ class TamerNet3000(pl.LightningModule):
         return {
             f"{prefix}/epoch_loss": torch.stack([item["loss"] for item in outputs]).mean(),
             f"{prefix}/precision": precision_score(targets, preds),
-            f"{prefix}/negative_precision": precision_score(~targets, ~preds),
+            f"{prefix}/negative_precision": precision_score(~targets.to(torch.bool), ~preds.to(torch.bool)),
             f"{prefix}/recall": recall_score(targets, preds),
-            f"{prefix}/negative_recall": recall_score(~targets, ~preds),
+            f"{prefix}/negative_recall": recall_score(~targets.to(torch.bool), ~preds.to(torch.bool)),
             f"{prefix}/f1": f1_score(targets, preds),
-            f"{prefix}/negative_f1": f1_score(targets, ~preds),
+            f"{prefix}/negative_f1": f1_score(~targets.to(torch.bool), ~preds.to(torch.bool)),
             f"{prefix}/roc_auc": roc_auc_score(targets, probas) if targets.any() != 0 and targets.all() != 1 else 0,
             f"{prefix}/accuracy": accuracy_score(targets, preds),
         }
