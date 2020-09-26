@@ -134,6 +134,7 @@ class TamerNet3000(pl.LightningModule):
             f"{prefix}/f1": f1_score(targets, preds),
             f"{prefix}/negative_f1": f1_score(~targets, ~preds),
             f"{prefix}/roc_auc": roc_auc_score(targets, probas) if targets.any() != 0 and targets.all() != 1 else 0,
+            f"{prefix}/negative_roc_auc": roc_auc_score(~targets, 1 - probas) if targets.any() != 0 and targets.all() != 1 else 0,
             f"{prefix}/accuracy": accuracy_score(targets, preds),
         }
 
