@@ -17,17 +17,18 @@ class TamerNet3000(pl.LightningModule):
         self.n_articles = n_articles
 
         # model
-        self.basket_embed = nn.Embedding(n_articles,
+        self.basket_embed = nn.Embedding(n_articles + 1,
                                          embedding_size,
                                          padding_idx=self.n_articles)
-        self.rnn = torch.nn.GRU(hidden_size=hidden_size,
+        self.rnn = torch.nn.GRU(input_size=embedding_size,
+                                hidden_size=hidden_size,
                                 batch_first=True)
         self.final_dense = nn.Linear(hidden_size, 1)
 
         self.loss = BCEWithLogitsLoss()
 
     def prepare_data(self) -> None:
-        transactions = pd.read_parquet("hack_data/transactions.parquet", engine="pyarrow")
+        transactions = pd.read_parquet("../../data/hack_data/transactions.parquet", engine="pyarrow")
         self.train_dataset = LentaDataset(transactions)
         self.val_dataset = LentaDataset(transactions)
 
@@ -51,7 +52,7 @@ class TamerNet3000(pl.LightningModule):
 
         return val_loader
 
-    def forward(self, batch: Tuple[List[List[List[int, ...]]], List[List[int, ...]], List[int]]) -> torch.float64:
+    def forward(self, batch: Tuple[List[List[List[int]]], List[List[int]], List[int]]) -> torch.float64:
         """
         :param batch: tuple of three objects:
             - transactions history (list of baskets with goods represented with their ordinal number)
@@ -60,10 +61,10 @@ class TamerNet3000(pl.LightningModule):
         :return:
         """
         transaction_hist, user_features, target = batch
-        user_features, target = (torch.tensor(user_features, device=self.device),
-                                 torch.tensor(target, device=self.device))
+        client_features, target = (torch.tensor(user_features, device=self.device),
+                                   torch.tensor(target, device=self.device))
 
-        baskets_lens = [[len(bill) for bill in user] for user in transaction_hist]
+        basket_lens = [[len(bill) for bill in user] for user in transaction_hist]
 
         # batch_size x (n_time_stamps_i x basket_size_i)
         flattened_transactions = [torch.tensor(list(chain.from_iterable(user))) for user in transaction_hist]
@@ -74,13 +75,34 @@ class TamerNet3000(pl.LightningModule):
                                                                         padding_value=self.n_artiles)
 
         # batch_size x max_{i}(n_time_stamps_i x basket_size_i) x embedding_size
-        baskets_embeddings = self.basket_embed(flattened_transactions_padded)
+        basket_embeddings_flattened = self.basket_embed(flattened_transactions_padded)
 
-        output, h_n = self.rnn(baskets_embeddings)
+        basket_embeddings = []
+        for basket_lens_in_chq, embeddings in zip(basket_lens, basket_embeddings_flattened):
+            i = 0
+            basket_embeddings.append([])
+            for basket_len in basket_lens_in_chq:
+                basket_embeddings[-1].append(embeddings[i:i + basket_len].mean(0))
+                i += basket_len
 
-        logits = self.final_dense(h_n)
+        basket_embeddings_padded = torch.nn.utils.rnn.pad_sequence(
+            basket_embeddings,
+            batch_first=True,
+            # padding_value=torch.zeros(basket_embeddings_flattened.shape[-1])
+            padding_value=0.0
+        )
+
+        output, h_n = self.rnn(basket_embeddings_padded)
+
+        # client_features = torch.cat([h_n, client_features], 1)
+        client_features = h_n
+
+        logits = self.final_dense(client_features)
 
         return logits
+
+    def configure_optimizers(self):
+        return self.torch.optim.Adam()
 
     def training_step(self, batch):
         logits = self(batch)
