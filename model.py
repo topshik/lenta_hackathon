@@ -101,13 +101,24 @@ class TamerNet3000(pl.LightningModule):
         logits = self(batch)
         loss = self.loss(logits.squeeze(), torch.tensor(batch[2], device=self.device, dtype=torch.float))
 
-        return {"loss": loss, "log": {"Training loss": loss.item()}}
+        return {"loss": loss, "logits": logits, "log": {"Training loss": loss.item()}}
+
+    def training_epoch_end(self, outputs):
+        epoch_loss = torch.stack([x["loss"] for x in outputs]).mean()
+
+        # Metrics
+        # acc_top1 = torch.stack([torch.tensor(x["acc_top1"]) for x in outputs]).mean()
+
+        logs = {"train/epoch_loss": epoch_loss,
+                "train/metric_coooooool": 0.0}
+
+        return {"val_loss": epoch_loss, "metric": 0.0, "log": logs}
 
     def validation_step(self, batch, batch_idx):
         logits = self(batch)
         loss = self.loss(logits.squeeze(), torch.tensor(batch[2], device=self.device, dtype=torch.float))
 
-        return {"loss": loss, "log": {"Training loss": loss.item()}}
+        return {"loss": loss, "logits": logits, "log": {"Validation loss": loss.item()}}
 
     def validation_epoch_end(self, outputs):
         epoch_loss = torch.stack([x["loss"] for x in outputs]).mean()
@@ -116,7 +127,7 @@ class TamerNet3000(pl.LightningModule):
         # acc_top1 = torch.stack([torch.tensor(x["acc_top1"]) for x in outputs]).mean()
 
         logs = {"val/epoch_loss": epoch_loss,
-                "metric_coooooool": 0.0}
+                "val/metric_coooooool": 0.0}
 
         return {"val_loss": epoch_loss, "metric": 0.0, "log": logs}
 
