@@ -6,13 +6,14 @@ import pytorch_lightning as pl
 import torch
 from torch import nn
 from torch.nn import BCEWithLogitsLoss
+from torch.optim.optimizer import Optimizer
 from torch.utils.data import DataLoader
 
-from data import LentaDataset
+from data import collate_fn, LentaDataset
 
 
 class TamerNet3000(pl.LightningModule):
-    def __init__(self, n_articles, embedding_size=128, hidden_size=128) -> None:
+    def __init__(self, n_articles, embedding_size=16, hidden_size=128) -> None:
         super().__init__()
         self.n_articles = n_articles
 
@@ -28,28 +29,33 @@ class TamerNet3000(pl.LightningModule):
         self.loss = BCEWithLogitsLoss()
 
     def prepare_data(self) -> None:
-        transactions = pd.read_parquet("../../data/hack_data/transactions.parquet", engine="pyarrow")
-        self.train_dataset = LentaDataset(transactions)
-        self.val_dataset = LentaDataset(transactions)
+        transactions = pd.read_parquet("hack_data/transactions_cut.parquet", engine="pyarrow")
+        transactions = transactions.sample(frac=0.05)
+        self.train_dataset = LentaDataset(transactions, [0, 1, 2])
+        self.val_dataset = LentaDataset(transactions, [1, 2, 3])
 
     def train_dataloader(self) -> DataLoader:
         train_loader = DataLoader(dataset=self.train_dataset,
                                   batch_size=16,
                                   shuffle=True,
-                                  num_workers=8,
+                                  num_workers=10,
                                   pin_memory=torch.cuda.is_available(),
-                                  drop_last=True)
+                                  drop_last=True,
+                                  collate_fn=collate_fn)
 
+        print("TRAINING LOADER CREATED")
         return train_loader
 
     def val_dataloader(self) -> DataLoader:
         val_loader = DataLoader(dataset=self.val_dataset,
                                 batch_size=16,
-                                shuffle=True,
-                                num_workers=8,
+                                shuffle=False,
+                                num_workers=10,
                                 pin_memory=torch.cuda.is_available(),
-                                drop_last=True)
+                                drop_last=True,
+                                collate_fn=collate_fn)
 
+        print("VALIDATION LOADER CREATED")
         return val_loader
 
     def forward(self, batch: Tuple[List[List[List[int]]], List[List[int]], List[int]]) -> torch.float64:
@@ -60,19 +66,8 @@ class TamerNet3000(pl.LightningModule):
             - binary target for prediction
         :return:
         """
-        transaction_hist, user_features, target = batch
-        client_features, target = (torch.tensor(user_features, device=self.device),
-                                   torch.tensor(target, device=self.device))
-
-        basket_lens = [[len(bill) for bill in user] for user in transaction_hist]
-
-        # batch_size x (n_time_stamps_i x basket_size_i)
-        flattened_transactions = [torch.tensor(list(chain.from_iterable(user))) for user in transaction_hist]
-
-        # batch_size x max_{i}(n_time_stamps_i x basket_size_i)
-        flattened_transactions_padded = torch.nn.utils.rnn.pad_sequence(flattened_transactions,
-                                                                        batch_first=True,
-                                                                        padding_value=self.n_artiles)
+        flattened_transactions_padded, basket_lens, target = batch
+        # client_features = (torch.tensor(user_features, device=self.device))
 
         # batch_size x max_{i}(n_time_stamps_i x basket_size_i) x embedding_size
         basket_embeddings_flattened = self.basket_embed(flattened_transactions_padded)
@@ -84,6 +79,7 @@ class TamerNet3000(pl.LightningModule):
             for basket_len in basket_lens_in_chq:
                 basket_embeddings[-1].append(embeddings[i:i + basket_len].mean(0))
                 i += basket_len
+            basket_embeddings[-1] = torch.stack(basket_embeddings[-1])
 
         basket_embeddings_padded = torch.nn.utils.rnn.pad_sequence(
             basket_embeddings,
@@ -101,17 +97,17 @@ class TamerNet3000(pl.LightningModule):
 
         return logits
 
-    def configure_optimizers(self):
-        return self.torch.optim.Adam()
-
-    def training_step(self, batch):
+    def training_step(self, batch, batch_idx):
         logits = self(batch)
-        loss = self.loss(logits)
+        loss = self.loss(logits.squeeze(), torch.tensor(batch[2], device=self.device, dtype=torch.float))
 
-        return {"loss": loss, "logs": {"Training loss": loss.item()}}
+        return {"loss": loss, "log": {"Training loss": loss.item()}}
 
-    def validation_step(self, batch):
+    def validation_step(self, batch, batch_idx):
         logits = self(batch)
-        loss = self.loss(logits)
+        loss = self.loss(logits.squeeze(), torch.tensor(batch[2], device=self.device, dtype=torch.float))
 
         return {"loss": loss.item(), "log": {"Training loss": loss.item()}}
+
+    def configure_optimizers(self) -> Optimizer:
+        return torch.optim.Adam(self.parameters(), lr=1e-4)
