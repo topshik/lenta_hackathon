@@ -24,6 +24,7 @@ def train():
     trainer = pl.Trainer(
         max_epochs=10,
         logger=wandb_logger,
+        gpus=1,
         checkpoint_callback=checkpoint_callback
     )
 
