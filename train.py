@@ -23,6 +23,9 @@ def train():
     model = TamerNet3000(n_articles=N_ARTICLES)
     trainer = pl.Trainer(
         max_epochs=10,
+        gpus=2,
+        auto_select_gpus=True,
+        distributed_backend="ddp",
         logger=wandb_logger,
         gpus=1,
         checkpoint_callback=checkpoint_callback
