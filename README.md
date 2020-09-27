@@ -3,6 +3,7 @@
 ![pytorch1.6.0](https://img.shields.io/badge/pytorch-v1.6.0-brightgreen)
 ![python3.8](https://img.shields.io/badge/wandb-v0.10-blue)
 ![sklearn0.23](https://img.shields.io/badge/scikit--learn-v0.23-lightgrey)
+![sklearn0.23](https://img.shields.io/badge/pytorch--lightning-v0.9-blue)
 
 This repository contains the machine learning part of the solution by our awesome team Pivo-T!
 
