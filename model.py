@@ -31,6 +31,7 @@ class TamerNet3000(pl.LightningModule):
                                          padding_idx=self.n_articles)
         self.rnn = torch.nn.GRU(input_size=embedding_size,
                                 hidden_size=hidden_size,
+                                num_layers=2,
                                 batch_first=True)
         self.final_dense = nn.Sequential(
             nn.Linear(hidden_size, hidden_size),
